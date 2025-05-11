@@ -1,3 +1,5 @@
+
+![intro photo](opening.gif)
 ## To hiring managers and recruiters checking this repository:
 
 There are three sub-folders in this repository: 
