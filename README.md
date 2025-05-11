@@ -6,7 +6,7 @@ There are three sub-folders in this repository:
 
 1. Data Analysis:Python coding samples in Visual Studio(data analysis and ML) and R coding samples in R-studio(data analysis and ML) in data analysis folder which has three sub-sub folders: 
 
-<img src="python.gif" alt="intro photo" width="100">
+<img src="python.gif" alt="intro photo" width="100">        
 
 i. [Python](data_analysis/python/): a sample for bootstrapping technique and another sample for time-series analysis
 
