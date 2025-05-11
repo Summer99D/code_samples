@@ -1,0 +1,178 @@
+---
+title: "Word Generation"
+author: "Ishan Gupta, Cindy Yang, Yuhao Wang, Yuxin Zhai, Summer Negahdar"
+date: "2025-02-24"
+---
+
+
+```{r}
+##changing settings for knitting
+knitr::opts_chunk$set(echo = TRUE, 
+                      include = TRUE, 
+                      fig.width = 6, fig.height = 4,
+                      results='markup',
+                      warning = FALSE,
+                      cache = TRUE,
+                      digits = 3,
+                      width= 200,
+                      tidy=TRUE)
+```
+
+
+```{r}
+## I will upload packages and upload datasets (will keep these for my teammates)
+install.packages("textir")      
+install.packages("maptpx")      
+install.packages("wordcloud")
+install.packages("gamlr")     
+install.packages("slam")
+install.packages("RColorBrewer")
+library(textir)
+library(maptpx)
+library(gamlr)
+library(wordcloud)
+library(RColorBrewer)
+
+# Load the data
+data(congress109)
+
+```
+
+
+## Question ONE
+
+```{r}
+
+# Define the kIC function for BIC
+kIC <- function(fit, rule=c("A","B")){
+    df <- length(fit$centers) # K*dim
+    n <- sum(fit$size)
+    D <- fit$tot.withinss # deviance
+    rule=match.arg(rule)
+    if(rule=="A")
+        return(D + 2*df*n/max(n-df-1,1))
+    else
+        return(D + log(n)*df)
+}
+
+# Standardize frequencies
+fs <- scale(as.matrix(congress109Counts/rowSums(congress109Counts)))
+
+# Fit k-means for K = 5,10,15,20,25
+kfit <- lapply(5*(1:5), function(k) kmeans(fs,k))
+
+# Calculate BIC for each K
+kbic <- sapply(kfit, kIC, "B")
+
+# Plot BIC
+par(mfrow=c(1,1))
+plot(5*(1:5), kbic, xlab="K", ylab="BIC",
+     bty="n", type="l", lwd=2, col=4)
+abline(v=which.min(kbic)*5, col=4)
+
+# Select model with minimum BIC
+kmfs <- kfit[[which.min(kbic)]]  # Fixed: No division by 5
+cat("Selected K:", which.min(kbic)*5, "\n")  # Multiply by 5 to get actual K
+
+# Interpret cluster centers - top 10 words per cluster
+print("Top words in each cluster (highest positive deviations):")
+print(apply(kmfs$centers, 1, function(c) colnames(fs)[order(-c)[1:10]]))
+# Cluster sizes
+print("Number of speeches in each cluster:")
+print(kmfs$size)
+```
+
+
+
+## Question Two
+```{r}
+
+# Convert to slam matrix
+x <- as.simple_triplet_matrix(congress109Counts)
+
+# Fit topic models for K=2:25
+tpcs <- topics(x, K=2:25)
+cat("Selected number of topics (via Bayes factors):", ncol(tpcs$omega), "\n")
+
+# Interpret topics
+# Top words by topic-over-aggregate lift
+print("Top 5 words by topic-over-aggregate lift:")
+summary(tpcs, n=5)
+
+# Top words by in-topic probability for first two topics
+print("Top 10 words in Topic 1 would be as follows:")
+print(rownames(tpcs$theta)[order(tpcs$theta[,1], decreasing=TRUE)[1:10]])
+print("Top 10 words in Topic 2 would be as follows:")
+print(rownames(tpcs$theta)[order(tpcs$theta[,2], decreasing=TRUE)[1:10]])
+
+# Party mean memberships
+DemO <- colMeans(tpcs$omega[congress109Ideology$party=="D",])
+RepO <- colMeans(tpcs$omega[congress109Ideology$party=="R",])
+print("Democrat/Republican topic weight ratios:")
+print(sort(DemO/RepO))
+
+# Word clouds for first two topics
+par(mfrow=c(1,2))
+wordcloud(row.names(tpcs$theta), 
+          freq=tpcs$theta[,1], min.freq=0.004, col="maroon",
+          main="Topic 1 (Likely Republican)")
+wordcloud(row.names(tpcs$theta), 
+          freq=tpcs$theta[,2], min.freq=0.004, col="navy",
+          main="Topic 2 (Likely Democrat)")
+```
+
+
+## Question THREE
+
+```{r}
+# Standardize frequencies for k-means
+fs <- scale(as.matrix(congress109Counts/rowSums(congress109Counts)))
+
+kmfs <- kmeans(fs, 5)
+
+# Tabulate party membership by k-means cluster
+print("Party membership by K-means cluster:")
+party_by_cluster <- tapply(congress109Ideology$party, kmfs$cluster, table)
+print(party_by_cluster)
+
+# Check largest cluster for non-partisan tendencies
+largest_cluster <- which.max(kmfs$size)
+print("Top words in largest cluster (potential non-partisan topic):")
+print(colnames(fs)[order(-kmfs$centers[largest_cluster,])[1:10]])
+
+# Fit topic model for regression
+x <- as.simple_triplet_matrix(congress109Counts)
+tpcs <- topics(x, K=2:25)  # Using same range as Q2
+
+# Topic regression for party (logistic)
+gop <- congress109Ideology[,"party"]=="R"
+partyreg <- gamlr(tpcs$omega, gop, family="binomial")
+print("Odds multipliers for 0.1 topic weight increase (party):")
+print(exp(coef(partyreg)*0.1))
+
+# Topic regression for repshare (linear)
+repreg <- gamlr(tpcs$omega, congress109Ideology[,"repshare"])
+print("Repshare increase per 0.1 topic weight (repshare):")
+print(coef(repreg)*0.1)
+
+# Compare with phrase percentage regression
+x_words <- 100*congress109Counts/rowSums(congress109Counts)
+regtopics.cv <- cv.gamlr(tpcs$omega, gop, family="binomial")
+regwords.cv <- cv.gamlr(x_words, gop, family="binomial")
+
+# Plot comparison
+par(mfrow=c(1,2))
+plot(regtopics.cv, main="Topic Regression")
+plot(regwords.cv, main="Phrase Count Regression")
+
+# Calculate and print maximum out-of-sample R^2
+topic_r2 <- max(1-regtopics.cv$cvm/regtopics.cv$cvm[1])
+word_r2 <- max(1-regwords.cv$cvm/regwords.cv$cvm[1])
+cat("Max OOS R^2 for topic regression:", topic_r2, "\n")
+cat("Max OOS R^2 for phrase count regression:", word_r2, "\n")
+```
+**Non-partisan topics**
+There isn’t a strictly non-partisan cluster, but the largest cluster (e.g., with 222 R and 112 D) shows a more balanced mix of parties compared to others. Examining its top words—such as "business.owner," "death.tax," "private.property," "repeal.death.tax," and "sex.offender"—reveals a conservative focus, suggesting it leans Republican but might include some Blue Dog Democrats (conservative Democrats). This cluster could be considered semi-non-partisan because it contains a notable number of speeches from both parties, but its content still leans toward Republican-leaning issues, not fully neutral topics
+
+**comparing the graphs**
+The **Topic Regression model** predicts party affiliation better than the **Phrase Count Regression model**. It works best when it uses all the topic details without simplifying them too much, reaching a low error rate of about 0.6. The Phrase Count model, however, needs some simplification to perform well, but even then, its lowest error is around 1.0—higher than the Topic model’s. This means **topics** are a more effective way to spot key patterns in speech data than just counting phrases, making them a smarter choice for this task.
