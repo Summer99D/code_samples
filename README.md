@@ -1,5 +1,4 @@
 
-<img src="opening.gif" alt="intro photo" width="400">
 ## To hiring managers and recruiters checking this repository:
 
 There are three sub-folders in this repository: 
