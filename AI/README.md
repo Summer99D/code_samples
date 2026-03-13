@@ -9,7 +9,7 @@ Bull: optimistic  toward market volatility
 
 Bear: Pessimistic toward market volatility
 
-Neutral relatively objective. 
+Neutral: relatively objective. 
 
 
 in previous parts of the project we had generated pre-labled new topics and the regression between market return and these topics and after training the AI model we compared the R-squared of each of them to conclude that pre-labled new topics have better predictive power for market return. 
